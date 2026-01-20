@@ -32,10 +32,10 @@ def load_models():
 @st.cache_data
 def load_data():
     files = [
-        "C:/Users/chang/Downloads/api_data_aadhar_biometric/api_data_aadhar_biometric_0_500000.csv",
-        "C:/Users/chang/Downloads/api_data_aadhar_biometric/api_data_aadhar_biometric_500000_1000000.csv",
-        "C:/Users/chang/Downloads/api_data_aadhar_biometric/api_data_aadhar_biometric_1000000_1500000.csv",
-        "C:/Users/chang/Downloads/api_data_aadhar_biometric/api_data_aadhar_biometric_1500000_1861108.csv"
+        "api_data_aadhar_biometric_0_500000.csv",
+        "api_data_aadhar_biometric_500000_1000000.csv",
+        "api_data_aadhar_biometric_1000000_1500000.csv",
+        "api_data_aadhar_biometric_1500000_1861108.csv"
     ]
 
     df = pd.concat([pd.read_csv(f) for f in files], ignore_index=True)
