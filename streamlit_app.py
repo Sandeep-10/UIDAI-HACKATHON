@@ -22,25 +22,29 @@ page = st.sidebar.selectbox(
     ["Risk Prediction", "Data Analysis", "About"]
 )
 
+# ================= HELPERS =================
+def is_known_label(label, encoder):
+    return label in encoder.classes_
+
 # ================= LOAD MODELS =================
 @st.cache_data
 def load_models():
-    files = [
-        "risk_prediction_model.pkl",
-        "state_encoder.pkl",
-        "district_encoder.pkl",
-        "risk_encoder.pkl"
-    ]
+    files = {
+        "model": "risk_prediction_model.pkl",
+        "state": "state_encoder.pkl",
+        "district": "district_encoder.pkl",
+        "risk": "risk_encoder.pkl"
+    }
 
-    for f in files:
+    for f in files.values():
         if not os.path.exists(f):
             return None, f"Missing model file: {f}"
 
     try:
-        model = joblib.load(files[0])
-        le_state = joblib.load(files[1])
-        le_district = joblib.load(files[2])
-        le_risk = joblib.load(files[3])
+        model = joblib.load(files["model"])
+        le_state = joblib.load(files["state"])
+        le_district = joblib.load(files["district"])
+        le_risk = joblib.load(files["risk"])
         return (model, le_state, le_district, le_risk), None
     except Exception as e:
         return None, str(e)
@@ -114,68 +118,89 @@ if page == "Risk Prediction":
         if err:
             st.error(err)
         else:
-            states = sorted(df["state"].unique())
+            # Only states seen during training
+            states = sorted(
+                [s for s in df["state"].unique() if s in le_state.classes_]
+            )
 
-            col1, col2 = st.columns(2)
+            if not states:
+                st.error("No valid states found that match trained model.")
+            else:
+                col1, col2 = st.columns(2)
 
-            with col1:
-                state = st.selectbox("Select State", states)
+                with col1:
+                    state = st.selectbox("Select State", states)
 
-                districts = (
-                    df[df["state"] == state]["district"]
-                    .dropna()
-                    .unique()
-                    .tolist()
-                )
-                districts = ["Select District"] + sorted(
-                    [d for d in districts if d not in ("?", "NA", "Unknown")]
-                )
+                    # Only districts known to model
+                    districts = (
+                        df[df["state"] == state]["district"]
+                        .dropna()
+                        .unique()
+                        .tolist()
+                    )
+                    districts = [
+                        d for d in districts
+                        if d in le_district.classes_ and d not in ("?", "NA", "Unknown")
+                    ]
 
-                district = st.selectbox("Select District", districts)
+                    if not districts:
+                        st.warning("No trained districts available for this state.")
+                        st.stop()
 
-                pincode = st.text_input(
-                    "Enter Pincode",
-                    max_chars=6,
-                    placeholder="6-digit pincode"
-                )
+                    districts = ["Select District"] + sorted(districts)
+                    district = st.selectbox("Select District", districts)
 
-            with col2:
-                selected_date = st.date_input("Select Date", datetime.now())
-                day = selected_date.day
-                month = selected_date.month
-                weekday = selected_date.weekday()
+                    pincode = st.text_input(
+                        "Enter Pincode",
+                        max_chars=6,
+                        placeholder="6-digit pincode"
+                    )
 
-            if st.button("Predict Risk Level", type="primary"):
-                if not pincode.isdigit() or len(pincode) != 6:
-                    st.error("Pincode must be a valid 6-digit number.")
-                elif district == "Select District":
-                    st.error("Please select a valid district.")
-                else:
-                    try:
-                        state_enc = le_state.transform([state])[0]
-                        district_enc = le_district.transform([district])[0]
+                with col2:
+                    selected_date = st.date_input("Select Date", datetime.now())
+                    day = selected_date.day
+                    month = selected_date.month
+                    weekday = selected_date.weekday()
 
-                        input_data = [[
-                            state_enc,
-                            district_enc,
-                            int(pincode),
-                            day,
-                            month,
-                            weekday
-                        ]]
+                if st.button("Predict Risk Level", type="primary"):
+                    if not pincode.isdigit() or len(pincode) != 6:
+                        st.error("Pincode must be a valid 6-digit number.")
+                    elif district == "Select District":
+                        st.error("Please select a valid district.")
+                    else:
+                        if not is_known_label(state, le_state):
+                            st.error("Selected state not supported by trained model.")
+                            st.stop()
 
-                        pred = model.predict(input_data)[0]
-                        risk = le_risk.inverse_transform([pred])[0]
+                        if not is_known_label(district, le_district):
+                            st.error("Selected district not supported by trained model.")
+                            st.stop()
 
-                        if risk == "Low":
-                            st.success("🟢 Predicted Risk Level: Low")
-                        elif risk == "Medium":
-                            st.warning("🟡 Predicted Risk Level: Medium")
-                        else:
-                            st.error("🔴 Predicted Risk Level: High")
+                        try:
+                            state_enc = le_state.transform([state])[0]
+                            district_enc = le_district.transform([district])[0]
 
-                    except Exception as e:
-                        st.error(f"Prediction failed: {e}")
+                            input_data = [[
+                                state_enc,
+                                district_enc,
+                                int(pincode),
+                                day,
+                                month,
+                                weekday
+                            ]]
+
+                            pred = model.predict(input_data)[0]
+                            risk = le_risk.inverse_transform([pred])[0]
+
+                            if risk == "Low":
+                                st.success("🟢 Predicted Risk Level: Low")
+                            elif risk == "Medium":
+                                st.warning("🟡 Predicted Risk Level: Medium")
+                            else:
+                                st.error("🔴 Predicted Risk Level: High")
+
+                        except Exception as e:
+                            st.error(f"Prediction failed: {e}")
 
 # ================= DATA ANALYSIS =================
 elif page == "Data Analysis":
@@ -220,7 +245,7 @@ elif page == "Data Analysis":
 
 # ================= ABOUT =================
 elif page == "About":
-    st.header("About This Application")
+    st.header("ℹ️ About This Application")
 
     st.markdown("""
 **UIDAI Biometric Risk Prediction System**
