@@ -8,7 +8,7 @@ import seaborn as sns
 import time
 import os
 
-# ---------------- PAGE CONFIG ----------------
+# ================= PAGE CONFIG =================
 st.set_page_config(
     page_title="UIDAI Biometric Risk Prediction System",
     layout="wide"
@@ -17,37 +17,36 @@ st.set_page_config(
 st.title("UIDAI Biometric Risk Prediction System")
 st.markdown("---")
 
-# ---------------- SIDEBAR ----------------
+# ================= SIDEBAR =================
 st.sidebar.title("Navigation")
 page = st.sidebar.selectbox(
     "Choose a page",
     ["Risk Prediction", "Data Analysis", "About"]
 )
 
-# ---------------- LOAD MODELS ----------------
+# ================= LOAD MODELS =================
 @st.cache_data
 def load_models():
-    model_files = {
-        "model": "risk_prediction_model.pkl",
-        "state": "state_encoder.pkl",
-        "district": "district_encoder.pkl",
-        "risk": "risk_encoder.pkl"
-    }
+    model_files = [
+        "risk_prediction_model.pkl",
+        "state_encoder.pkl",
+        "district_encoder.pkl",
+        "risk_encoder.pkl"
+    ]
 
-    for name, path in model_files.items():
-        if not os.path.exists(path):
-            st.error(f"Missing model file: {path}")
+    for f in model_files:
+        if not os.path.exists(f):
+            st.error(f"Missing model file: {f}")
             st.stop()
 
-    model = joblib.load(model_files["model"])
-    le_state = joblib.load(model_files["state"])
-    le_district = joblib.load(model_files["district"])
-    le_risk = joblib.load(model_files["risk"])
+    model = joblib.load("risk_prediction_model.pkl")
+    le_state = joblib.load("state_encoder.pkl")
+    le_district = joblib.load("district_encoder.pkl")
+    le_risk = joblib.load("risk_encoder.pkl")
 
     return model, le_state, le_district, le_risk
 
-# ---------------- LOAD DATA ----------------
-@st.cache_data
+# ================= LOAD DATA (NO CACHE) =================
 def load_data():
     files = [
         "api_data_aadhar_biometric_0_500000.csv",
@@ -68,18 +67,19 @@ def load_data():
     df.drop_duplicates(inplace=True)
     df.dropna(inplace=True)
 
-    # ---- SAFE COLUMN HANDLING ----
-    required_cols = ["bio_age_0_5", "bio_age_5_17"]
-    for col in required_cols:
-        if col not in df.columns:
-            st.error(f"Required column missing: {col}")
-            st.write("Available columns:", df.columns.tolist())
-            st.stop()
+    # DEBUG (safe to remove later)
+    st.write("Detected columns:", df.columns.tolist())
 
+    # ✅ CORRECT columns for your dataset
+    if "bio_age_5_17" not in df.columns or "bio_age_17_" not in df.columns:
+        st.error("Required biometric columns are missing")
+        st.stop()
+
+    # Total biometric usage
     df["total_bio"] = df["bio_age_5_17"] + df["bio_age_17_"]
 
-    # Date handling
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    # Date processing
+    df["date"] = pd.to_datetime(df["date"], format="%d-%m-%Y", errors="coerce")
     df.dropna(subset=["date"], inplace=True)
 
     df["day"] = df["date"].dt.day
@@ -97,7 +97,7 @@ def load_data():
     df["risk_level"] = df["total_bio"].apply(usage_risk)
     return df
 
-# ---------------- PAGE TRANSITION ----------------
+# ================= PAGE TRANSITION =================
 if "last_page" not in st.session_state:
     st.session_state.last_page = page
 
@@ -160,19 +160,12 @@ if page == "Risk Prediction":
                 st.success("Prediction Complete")
 
                 if risk == "Low":
-                    st.success("🟢 Predicted Risk Level: **Low**")
+                    st.success("🟢 Predicted Risk Level: Low")
                 elif risk == "Medium":
-                    st.warning("🟡 Predicted Risk Level: **Medium**")
+                    st.warning("🟡 Predicted Risk Level: Medium")
                 else:
-                    st.error("🔴 Predicted Risk Level: **High**")
+                    st.error("🔴 Predicted Risk Level: High")
 
-                with st.expander("View Input Summary"):
-                    st.markdown(f"""
-                    **State:** {state}  
-                    **District:** {district}  
-                    **Pincode:** {pincode}  
-                    **Date:** {selected_date}
-                    """)
             except Exception as e:
                 st.error(f"Prediction failed: {e}")
 
@@ -195,30 +188,23 @@ elif page == "Data Analysis":
     )
 
     with tab1:
-        s = df.groupby("state")["total_bio"].sum().nlargest(10)
         fig, ax = plt.subplots()
-        s.plot(kind="barh", ax=ax)
+        df.groupby("state")["total_bio"].sum().nlargest(10).plot(kind="barh", ax=ax)
         st.pyplot(fig)
 
     with tab2:
-        d = df.groupby("district")["total_bio"].sum().nlargest(10)
         fig, ax = plt.subplots()
-        d.plot(kind="barh", ax=ax)
+        df.groupby("district")["total_bio"].sum().nlargest(10).plot(kind="barh", ax=ax)
         st.pyplot(fig)
 
     with tab3:
-        m = df.groupby("month")["total_bio"].sum()
         fig, ax = plt.subplots()
-        m.plot(marker="o", ax=ax)
+        df.groupby("month")["total_bio"].sum().plot(marker="o", ax=ax)
         st.pyplot(fig)
 
     with tab4:
         fig, ax = plt.subplots()
-        df["risk_level"].value_counts().plot(
-            kind="pie",
-            autopct="%1.1f%%",
-            ax=ax
-        )
+        df["risk_level"].value_counts().plot(kind="pie", autopct="%1.1f%%", ax=ax)
         ax.set_ylabel("")
         st.pyplot(fig)
 
