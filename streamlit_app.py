@@ -76,7 +76,7 @@ def load_data():
             st.write("Available columns:", df.columns.tolist())
             st.stop()
 
-    df["total_bio"] = df["bio_age_0_5"] + df["bio_age_5_17"]
+    df["total_bio"] = df["bio_age_5_17"] + df["bio_age_17_"]
 
     # Date handling
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
